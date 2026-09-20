@@ -396,8 +396,17 @@ async function handleVerifyPanel(interaction) {
 }
 
 async function handleVerifyButton(interaction) {
-  if (!VERIFIED_ROLE_ID || !CLIENT_SECRET || !PUBLIC_URL) {
-    return interaction.reply({ content: 'Verification is not configured.', flags: MessageFlags.Ephemeral });
+  const missing = [
+    !VERIFIED_ROLE_ID && 'VERIFIED_ROLE_ID',
+    !CLIENT_SECRET && 'CLIENT_SECRET',
+    !PUBLIC_URL && 'PUBLIC_URL',
+  ].filter(Boolean);
+  if (missing.length) {
+    console.warn('Verification not configured, missing:', missing.join(', '));
+    return interaction.reply({
+      content: `Verification is not configured. Missing env: **${missing.join(', ')}**`,
+      flags: MessageFlags.Ephemeral,
+    });
   }
   const url = verifyUrl(interaction.guildId, interaction.user.id);
   const row = new ActionRowBuilder().addComponents(
