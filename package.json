@@ -4,7 +4,9 @@
   "description": "Vexel Store Discord bot: vouches, payments, verification, protection",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node start.js",
+    "start:store": "node index.js",
+    "start:ticket": "BOT_MODE=ticket node start.js",
     "dev": "node index.js"
   },
   "engines": {

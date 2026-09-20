@@ -36,10 +36,11 @@ services:
     name: botivo-ticket-bot
     runtime: node
     plan: free
-    rootDir: ticket-bot
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      - key: BOT_MODE
+        value: ticket
       - key: DISCORD_TOKEN
         sync: false
       - key: GUILD_ID
