@@ -60,6 +60,9 @@ if (!DISCORD_TOKEN) {
 if (!CLIENT_SECRET || !PUBLIC_URL) {
   console.warn('CLIENT_SECRET and PUBLIC_URL are required for OAuth verification and /transfer.');
 }
+if (PUBLIC_URL && !/^https:\/\//i.test(PUBLIC_URL) && !/^http:\/\/(localhost|127\.0\.0\.1)/i.test(PUBLIC_URL)) {
+  console.warn('PUBLIC_URL should use https:// — OAuth codes are sent over this URL.');
+}
 
 // ---------------------------------------------------------------------------
 // Persistence: OAuth tokens (Postgres if DATABASE_URL, else data.json)
@@ -96,19 +99,24 @@ async function loadData() {
   console.log(`Loaded ${Object.keys(tokens).length} verified user tokens`);
 }
 
-async function saveData() {
-  try {
-    if (pgPool) {
-      await pgPool.query(
-        'INSERT INTO bot_state (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
-        ['tokens', JSON.stringify(tokens)]
-      );
-    } else {
-      fs.writeFileSync(DATA_FILE, JSON.stringify({ tokens }, null, 2));
+let saveChain = Promise.resolve();
+function saveData() {
+  saveChain = saveChain.then(async () => {
+    const snapshot = JSON.stringify(tokens);
+    try {
+      if (pgPool) {
+        await pgPool.query(
+          'INSERT INTO bot_state (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+          ['tokens', snapshot]
+        );
+      } else {
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ tokens: JSON.parse(snapshot) }, null, 2));
+      }
+    } catch (err) {
+      console.warn('Failed to save data:', err.message);
     }
-  } catch (err) {
-    console.warn('Failed to save data:', err.message);
-  }
+  });
+  return saveChain;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,11 +351,11 @@ async function handlePaid(interaction) {
 // ---------------------------------------------------------------------------
 const OAUTH_SCOPES = 'identify guilds.join';
 const REDIRECT_URI = `${PUBLIC_URL}/callback`;
-const pendingStates = new Map(); // state -> { guildId, createdAt }
+const pendingStates = new Map(); // state -> { guildId, userId, createdAt }
 
-function verifyUrl(guildId) {
+function verifyUrl(guildId, userId) {
   const state = crypto.randomBytes(16).toString('hex');
-  pendingStates.set(state, { guildId, createdAt: Date.now() });
+  pendingStates.set(state, { guildId, userId, createdAt: Date.now() });
   const params = new URLSearchParams({
     client_id: client.user.id,
     redirect_uri: REDIRECT_URI,
@@ -391,7 +399,7 @@ async function handleVerifyButton(interaction) {
   if (!VERIFIED_ROLE_ID || !CLIENT_SECRET || !PUBLIC_URL) {
     return interaction.reply({ content: 'Verification is not configured.', flags: MessageFlags.Ephemeral });
   }
-  const url = verifyUrl(interaction.guildId);
+  const url = verifyUrl(interaction.guildId, interaction.user.id);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setLabel('Open Verification').setStyle(ButtonStyle.Link).setURL(url)
   );
@@ -494,6 +502,16 @@ async function handleOAuthCallback(reqUrl, res) {
   if (!userRes.ok) return send(400, 'Verification failed', 'Could not fetch your Discord account.');
 
   const userId = userRes.body.id;
+  if (userId !== pending.userId) {
+    return send(403, 'Verification failed', 'This link belongs to a different Discord account. Click Verify yourself in Discord.');
+  }
+
+  const guild = await client.guilds.fetch(pending.guildId).catch(() => null);
+  const member = guild && (await guild.members.fetch(userId).catch(() => null));
+  if (!member) {
+    return send(400, 'Verification failed', 'You are not in the server anymore. Rejoin and click Verify again.');
+  }
+
   tokens[userId] = {
     accessToken: tokenRes.body.access_token,
     refreshToken: tokenRes.body.refresh_token,
@@ -502,18 +520,14 @@ async function handleOAuthCallback(reqUrl, res) {
   };
   await saveData();
 
-  const guild = await client.guilds.fetch(pending.guildId).catch(() => null);
-  const member = guild && (await guild.members.fetch(userId).catch(() => null));
-  if (member) {
-    try {
-      await member.roles.add(VERIFIED_ROLE_ID, 'Verified via OAuth');
-      if (UNVERIFIED_ROLE_ID && member.roles.cache.has(UNVERIFIED_ROLE_ID)) {
-        await member.roles.remove(UNVERIFIED_ROLE_ID, 'Verified via OAuth');
-      }
-    } catch (err) {
-      console.error('Role assign failed:', err.message);
-      return send(500, 'Almost there', 'You authorized, but the verified role could not be assigned. Contact staff.');
+  try {
+    await member.roles.add(VERIFIED_ROLE_ID, 'Verified via OAuth');
+    if (UNVERIFIED_ROLE_ID && member.roles.cache.has(UNVERIFIED_ROLE_ID)) {
+      await member.roles.remove(UNVERIFIED_ROLE_ID, 'Verified via OAuth');
     }
+  } catch (err) {
+    console.error('Role assign failed:', err.message);
+    return send(500, 'Almost there', 'You authorized, but the verified role could not be assigned. Contact staff.');
   }
 
   send(200, 'You are verified!', 'You can close this tab and return to Discord.');
@@ -571,21 +585,26 @@ async function handleTransfer(interaction) {
   let failed = 0;
 
   for (const member of humans.values()) {
-    const accessToken = await getAccessToken(member.id);
-    if (!accessToken) {
-      noToken++;
-      continue;
-    }
-    const res = await discordApi(`/guilds/${target.id}/members/${member.id}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: accessToken }),
-    });
-    if (res.status === 201) added++;
-    else if (res.status === 204) already++;
-    else {
+    try {
+      const accessToken = await getAccessToken(member.id);
+      if (!accessToken) {
+        noToken++;
+        continue;
+      }
+      const res = await discordApi(`/guilds/${target.id}/members/${member.id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+      if (res.status === 201) added++;
+      else if (res.status === 204) already++;
+      else {
+        failed++;
+        console.warn(`Join failed for ${member.user.tag}:`, res.status, res.body);
+      }
+    } catch (err) {
       failed++;
-      console.warn(`Join failed for ${member.user.tag}:`, res.status, res.body);
+      console.warn(`Join errored for ${member.user.tag}:`, err.message);
     }
     await new Promise((r) => setTimeout(r, 250));
   }
