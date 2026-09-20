@@ -36,4 +36,4 @@ Setting `GUILD_ID` registers commands instantly to that server; without it, glob
 
 ## Ticket bot (Botivo)
 
-A second, separate Discord bot lives in [`ticket-bot/`](ticket-bot/README.md). Deploy it as its own service with root directory `ticket-bot`.
+A second, separate Discord bot lives in [`ticket-bot/`](ticket-bot/README.md). Deploy it as its own service on this repo with `BOT_MODE=ticket` set.
