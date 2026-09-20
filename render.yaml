@@ -32,18 +32,7 @@ services:
         sync: false
       - key: VERIFY_CHANNEL_ID
         sync: false
-  - type: web
-    name: botivo-ticket-bot
-    runtime: node
-    plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: BOT_MODE
-        value: ticket
-      - key: DISCORD_TOKEN
-        sync: false
-      - key: GUILD_ID
+      - key: TICKET_BOT_TOKEN
         sync: false
       - key: SUPPORT_ROLE_ID
         sync: false

@@ -27,7 +27,8 @@ const {
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const DISCORD_TOKEN = process.env.TICKET_BOT_TOKEN || process.env.DISCORD_TOKEN;
+const EMBEDDED = process.env.TICKET_EMBEDDED === '1';
 const GUILD_ID = process.env.GUILD_ID || '';
 const BRAND_NAME = process.env.BRAND_NAME || 'Botivo';
 const SUPPORT_ROLE_ID = process.env.SUPPORT_ROLE_ID || '';
@@ -39,7 +40,7 @@ const EMBED_COLOR = parseInt((process.env.EMBED_COLOR || '1e90ff').replace('#', 
 const PORT = process.env.PORT || 3000;
 
 if (!DISCORD_TOKEN) {
-  console.error('DISCORD_TOKEN is required.');
+  console.error('TICKET_BOT_TOKEN is required.');
   process.exit(1);
 }
 
@@ -415,7 +416,7 @@ client.on('interactionCreate', async (interaction) => {
 // Startup
 // ---------------------------------------------------------------------------
 client.once('clientReady', async () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`[ticket-bot] Logged in as ${client.user.tag}`);
   try {
     await registerCommands();
   } catch (err) {
@@ -431,11 +432,13 @@ client.once('clientReady', async () => {
   }
 });
 
-http
-  .createServer((_, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-  })
-  .listen(PORT, () => console.log(`Health server on :${PORT}`));
+if (!EMBEDDED) {
+  http
+    .createServer((_, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('OK');
+    })
+    .listen(PORT, () => console.log(`Health server on :${PORT}`));
+}
 
 client.login(DISCORD_TOKEN);
