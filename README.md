@@ -33,3 +33,7 @@ Setting `GUILD_ID` registers commands instantly to that server; without it, glob
 ## Deploy
 
 `render.yaml` is included for Render. Any Node host (Railway, VPS, etc.) works with `npm start`. The bot serves HTTP on `PORT` (default 3000) for the OAuth callback (`/callback`) and health checks, so the service must be publicly reachable at `PUBLIC_URL`.
+
+## Ticket bot (Botivo)
+
+A second, separate Discord bot lives in [`ticket-bot/`](ticket-bot/README.md). Deploy it as its own service with root directory `ticket-bot`.
