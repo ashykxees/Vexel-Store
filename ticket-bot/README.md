@@ -19,4 +19,4 @@ A separate Discord bot (own application + token) living in the same repo as the 
 
 ## Railway
 
-Add a **second service** in the same Railway project pointing at this repo (no root-directory change needed) and set the variable `BOT_MODE=ticket` — the root `npm start` will then launch this bot. Give it its own variables (the ticket bot's token, not the Vexel Store one).
+No second service needed: on the existing Vexel Store service add `TICKET_BOT_TOKEN` (this bot's token) plus `SUPPORT_ROLE_ID`, `TICKET_LOG_CHANNEL_ID`, and optionally `TICKET_CATEGORY_ID` / `PANEL_CHANNEL_ID` / `WEBSITE_URL`. Both bots then run in one process. (To run only this bot, set `BOT_MODE=ticket`.)
