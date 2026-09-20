@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: vexel-store-bot
     runtime: node
     plan: free
@@ -19,6 +19,12 @@ services:
       - key: PROTECTED_ROLE_IDS
         sync: false
       - key: CASHAPP_TAG
+        sync: false
+      - key: CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
         sync: false
       - key: VERIFIED_ROLE_ID
         sync: false
