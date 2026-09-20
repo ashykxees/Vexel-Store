@@ -1,0 +1,28 @@
+services:
+  - type: worker
+    name: vexel-store-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: VOUCH_CHANNEL_ID
+        sync: false
+      - key: AUTO_REACT_CHANNEL_ID
+        sync: false
+      - key: PAYMENT_PING_ROLE_ID
+        sync: false
+      - key: PROTECTED_ROLE_IDS
+        sync: false
+      - key: CASHAPP_TAG
+        sync: false
+      - key: VERIFIED_ROLE_ID
+        sync: false
+      - key: UNVERIFIED_ROLE_ID
+        sync: false
+      - key: VERIFY_CHANNEL_ID
+        sync: false

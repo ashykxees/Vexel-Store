@@ -1,0 +1,17 @@
+{
+  "name": "vexel-store-bot",
+  "version": "1.0.0",
+  "description": "Vexel Store Discord bot: vouches, payments, verification, protection",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
