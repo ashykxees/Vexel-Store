@@ -740,6 +740,9 @@ client.once('clientReady', async () => {
 http
   .createServer(async (req, res) => {
     const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (reqUrl.pathname === '/stripe/webhook') {
+      return require('./ticket-bot/orders').handleStripeWebhook(req, res);
+    }
     if (reqUrl.pathname === '/callback') {
       if (!client.isReady()) {
         res.writeHead(503, { 'Content-Type': 'text/html' });

@@ -24,6 +24,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const Stripe = require('stripe');
+const orders = require('./orders');
 
 // ---------------------------------------------------------------------------
 // Config
@@ -524,6 +525,8 @@ client.on('interactionCreate', async (interaction) => {
 // ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
+orders.attachClient(client);
+
 client.once('clientReady', async () => {
   console.log(`[ticket-bot] Logged in as ${client.user.tag}`);
   try {
@@ -543,7 +546,8 @@ client.once('clientReady', async () => {
 
 if (!EMBEDDED) {
   http
-    .createServer((_, res) => {
+    .createServer((req, res) => {
+      if (req.url.split('?')[0] === '/stripe/webhook') return orders.handleStripeWebhook(req, res);
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('OK');
     })
