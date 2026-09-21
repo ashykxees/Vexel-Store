@@ -37,3 +37,5 @@ Setting `GUILD_ID` registers commands instantly to that server; without it, glob
 ## Ticket bot (Botivo)
 
 A second, separate Discord bot lives in [`ticket-bot/`](ticket-bot/README.md). It runs in the same process when `TICKET_BOT_TOKEN` is set.
+
+The ticket bot also provides the administrator-only `/generate-discount` command. Set `STRIPE_SECRET_KEY` in the root environment (the bot can also run standalone with the same variable in `ticket-bot/.env`) and provide a percentage, maximum uses, minimum purchase in dollars, and an optional custom code. It creates a Stripe promotion code for the Botivo checkout coupon box.
