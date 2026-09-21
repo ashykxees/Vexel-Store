@@ -23,6 +23,7 @@ const {
   AttachmentBuilder,
   MessageFlags,
 } = require('discord.js');
+const Stripe = require('stripe');
 
 // ---------------------------------------------------------------------------
 // Config
@@ -38,6 +39,7 @@ const PANEL_CHANNEL_ID = process.env.PANEL_CHANNEL_ID || '';
 const WEBSITE_URL = process.env.WEBSITE_URL || '';
 const EMBED_COLOR = parseInt((process.env.EMBED_COLOR || '1e90ff').replace('#', ''), 16);
 const PORT = process.env.PORT || 3000;
+let stripeClient = null;
 
 if (!DISCORD_TOKEN) {
   console.error('TICKET_BOT_TOKEN is required.');
@@ -103,6 +105,32 @@ const commands = [
     .setDescription('Close this ticket')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
     .setDMPermission(false),
+  new SlashCommandBuilder()
+    .setName('generate-discount')
+    .setDescription('Create a Stripe promotion code')
+    .addNumberOption((o) =>
+      o
+        .setName('amount')
+        .setDescription('Percent off')
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(100)
+    )
+    .addIntegerOption((o) =>
+      o.setName('max_uses').setDescription('Maximum number of uses').setRequired(true).setMinValue(1)
+    )
+    .addNumberOption((o) =>
+      o
+        .setName('min_purchase')
+        .setDescription('Minimum purchase in dollars (0 for none)')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+    .addStringOption((o) =>
+      o.setName('code').setDescription('Custom promotion code').setMinLength(3).setMaxLength(30)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
 ].map((c) => c.toJSON());
 
 async function registerCommands() {
@@ -137,6 +165,19 @@ function brandEmbed() {
 
 function isAdmin(interaction) {
   return interaction.inGuild() && interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+}
+
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is not set');
+  if (!stripeClient) stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  return stripeClient;
+}
+
+function generateDiscountCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let suffix = '';
+  for (let i = 0; i < 6; i += 1) suffix += chars[Math.floor(Math.random() * chars.length)];
+  return `BOTIVO-${suffix}`;
 }
 
 function isStaff(member) {
@@ -385,6 +426,73 @@ async function closeTicket(interaction) {
 }
 
 // ---------------------------------------------------------------------------
+// /generate-discount
+// ---------------------------------------------------------------------------
+async function handleGenerateDiscount(interaction) {
+  if (!isAdmin(interaction)) {
+    return interaction.reply({ content: 'Only administrators can use this command.', flags: MessageFlags.Ephemeral });
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return interaction.reply({ content: 'Stripe is not configured yet.', flags: MessageFlags.Ephemeral });
+  }
+
+  const amount = interaction.options.getNumber('amount', true);
+  const maxUses = interaction.options.getInteger('max_uses', true);
+  const minPurchase = interaction.options.getNumber('min_purchase', true);
+  const inputCode = interaction.options.getString('code');
+  const code = inputCode ? inputCode.toUpperCase() : generateDiscountCode();
+
+  if (!/^[A-Z0-9_-]+$/.test(code)) {
+    return interaction.reply({
+      content: 'Code may only contain letters, numbers, underscores, and hyphens.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const stripe = getStripe();
+    const coupon = await stripe.coupons.create({
+      percent_off: amount,
+      duration: 'once',
+      name: `${amount}% off`,
+      metadata: {
+        botivo: 'generate-discount',
+        created_by: interaction.user.id,
+      },
+    });
+    const promotionCode = await stripe.promotionCodes.create({
+      promotion: { type: 'coupon', coupon: coupon.id },
+      code,
+      max_redemptions: maxUses,
+      restrictions:
+        minPurchase > 0
+          ? {
+              minimum_amount: Math.round(minPurchase * 100),
+              minimum_amount_currency: (process.env.STORE_CURRENCY || 'usd').toLowerCase(),
+            }
+          : undefined,
+      metadata: { created_by: interaction.user.id },
+    });
+    const embed = brandEmbed()
+      .setTitle('🎟️ Discount code created')
+      .addFields(
+        { name: 'Code', value: `\`${promotionCode.code}\``, inline: true },
+        { name: 'Discount', value: `${amount}% off`, inline: true },
+        { name: 'Max uses', value: `${maxUses}`, inline: true },
+        { name: 'Minimum purchase', value: minPurchase > 0 ? `$${minPurchase.toFixed(2)}` : 'None', inline: true },
+        { name: 'Created by', value: `${interaction.user}`, inline: true }
+      )
+      .setFooter({ text: 'Use it in the coupon box at checkout', iconURL: `attachment://${LOGO_FILE}` });
+    await interaction.editReply({ embeds: [embed], files: brandFiles() });
+  } catch (err) {
+    const message = err?.message || 'Stripe error';
+    console.error('Discount creation failed:', message);
+    await interaction.editReply(`Unable to create discount: ${message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Interactions
 // ---------------------------------------------------------------------------
 client.on('interactionCreate', async (interaction) => {
@@ -397,6 +505,7 @@ client.on('interactionCreate', async (interaction) => {
         return handleTicketPanel(interaction);
       }
       if (interaction.commandName === 'close') return closeTicket(interaction);
+      if (interaction.commandName === 'generate-discount') return handleGenerateDiscount(interaction);
       return;
     }
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') return handleSelect(interaction);
