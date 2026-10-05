@@ -534,6 +534,7 @@ client.once('clientReady', async () => {
   } catch (err) {
     console.error('Command registration failed:', err);
   }
+  orders.startOrderPoller();
   if (PANEL_CHANNEL_ID) {
     const channel = await client.channels.fetch(PANEL_CHANNEL_ID).catch(() => null);
     if (channel?.isTextBased()) {
