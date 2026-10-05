@@ -42,4 +42,4 @@ The ticket bot also provides the administrator-only `/generate-discount` command
 
 ### Order logging
 
-The bot exposes `POST /stripe/webhook` on its HTTP server. In the Stripe Dashboard add a webhook endpoint pointing at `https://<bot-host>/stripe/webhook` for the `checkout.session.completed` event, then set `STRIPE_WEBHOOK_SECRET` to its signing secret. Each paid order is posted as an embed (order #, email, in-server check, payment method, products) to `ORDER_CHANNEL_ID` (default `1551324617896099980`).
+The bot automatically polls Stripe for completed orders using `STRIPE_SECRET_KEY` (optional interval: `ORDER_POLL_SECONDS`, default 30 seconds). Give it **View Channel**, **Send Messages**, and **Embed Links** in `ORDER_CHANNEL_ID` (default `1551324617896099980`); set `GUILD_ID` for the in-server check. The `POST /stripe/webhook` endpoint remains optional for instant logging.
